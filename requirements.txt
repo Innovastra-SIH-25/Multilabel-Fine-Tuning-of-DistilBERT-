@@ -5,3 +5,7 @@ scikit-learn
 torch
 transformers
 datasets
+geopy
+shapely
+pyshp
+accelerate
