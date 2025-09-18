@@ -1,7 +1,7 @@
 import pandas as pd
 
 print("🔍 Checking dataset balance...")
-df = pd.read_csv('ocean_hazards_tweets.csv')
+df = pd.read_csv('final_training_dataset.csv')
 
 print("Total tweets:", len(df))
 print("\n--- Hazard Distribution ---")

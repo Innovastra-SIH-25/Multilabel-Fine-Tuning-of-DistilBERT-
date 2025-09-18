@@ -4,6 +4,15 @@ import torch
 from geopy.geocoders import Nominatim
 import shapefile
 from shapely.geometry import Point, MultiLineString, shape
+import re
+
+# --- Text Cleaning Function (to match training) ---
+def clean_tweet_text(text):
+    text = re.sub(r"http\S+", "", text)
+    text = re.sub(r"@[a-zA-Z0-9_]+", "", text)
+    text = re.sub(r"#", "", text)
+    # Handle potential non-string data
+    return str(text).strip() if text else ""
 
 # --- Model Loading ---
 m_path = "./trained_model"
@@ -40,10 +49,10 @@ oceanic_disasters = {"tsunami", "high_waves", "coastal_flooding"}
 # --- End of Setup ---
 
 t_tweets = [
-    "Tsunami warning issued for Chennai. Evacuate immediately!",
-    "Massive waves hitting Mumbai beach right now! Very scary situation.",
-    "Hearing reports about a potential tsunami in Pune, seems fake.",
-    "Water entering homes in coastal areas of Puri. Need help urgently."
+    "In the forest of fiat, #Bitcoin is the sacred fire. https://t.co/o1vKerHsAR",
+    "TO AFGANISTAN PEOPLE WHO HAVE SUFFERED DUE TO RECENT EARTHQUAKE BUT NOT TO OWN PEOPLE OF PUNJAB STATE WHICH IS THE MOST IMPORTANT STATE FOR PROTECTING THE  INTEGRITY &amp;THE SAFETY/SECURITY OF INDIA&amp; FEEDING FOR WHEAT/RICE/MILK/SPARE PARTS/HOSIERY GOODS/AGRI.TOOLS/SPORTS GOODS contd",
+    "Tsunami warning issued after 7.4 magnitude earthquake strikes off Alaska https://t.co/0gk3d8w1vD",
+    "@DntBurnYaBridge @RuffRydaz_ Well I put in tampons when I go out with no panties on too. Coochie stay wet and ion wanna cause a tsunami in nepal",
 ]
 
 print("🧪 Making predictions on test tweets:")
@@ -52,20 +61,24 @@ print("-" * 50)
 for i, t in enumerate(t_tweets, 1):
     print(f"\n{i}. Tweet: {t}")
     
-    c_res = c(t)
+    # Apply text cleaning before classification
+    cleaned_t = clean_tweet_text(t)
+    
+    # Use cleaned text for classifier, raw text for NER
+    c_res = c(cleaned_t)
     ner_res = ner_p(t)
     
     print("   Classification:")
     highest_disaster = ""
     max_score = 0.0
     for l_s in c_res[0]:
-        if l_s['score'] > 0.65:
+        # Updated to use the new optimal threshold
+        if l_s['score'] > 0.60:
             print(f"      - {l_s['label']}: {l_s['score']:.3f}")
             if l_s['score'] > max_score and l_s['label'] in oceanic_disasters:
                 max_score = l_s['score']
                 highest_disaster = l_s['label']
 
-    # --- Location logging restored ---
     print("   Location:")
     locations = []
     for e in ner_res:
@@ -76,7 +89,6 @@ for i, t in enumerate(t_tweets, 1):
     if not locations:
         print("      - No location found.")
     
-    # --- Geospatial Risk Assessment (Detailed Output) ---
     print("   Risk Assessment:")
     if highest_disaster and locations:
         loc_name = locations[0]
@@ -103,7 +115,6 @@ for i, t in enumerate(t_tweets, 1):
             elif highest_disaster in ["high_waves", "coastal_flooding"]:
                 if dist_km <= 30: risk_level = "HIGH"
 
-            # --- Distance logging restored ---
             print(f"      - Location: {loc_name} ({dist_km:.1f} km from coast)")
             print(f"      - ☢️  Calculated Risk Level: {risk_level}")
         else:

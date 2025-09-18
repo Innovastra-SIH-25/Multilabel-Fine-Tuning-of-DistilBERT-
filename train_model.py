@@ -2,7 +2,7 @@
 import torch
 from transformers import (
     AutoTokenizer, AutoModelForSequenceClassification,
-    Trainer, TrainingArguments
+    Trainer, TrainingArguments, EarlyStoppingCallback
 )
 from datasets import Dataset
 import pandas as pd
@@ -18,12 +18,14 @@ def clean_text(examples):
     text = re.sub(r"http\S+", "", text)
     text = re.sub(r"@[a-zA-Z0-9_]+", "", text)
     text = re.sub(r"#", "", text)
-    examples["text"] = text.strip()
+    # Handle potential non-string data
+    examples["text"] = str(text).strip() if text else ""
     return examples
 
 # --- 2. Load and Prepare Dataset ---
-print("📂 Loading dataset...")
-df = pd.read_csv("ocean_hazards_tweets.csv")
+print("📂 Loading final combined dataset...")
+df = pd.read_csv("final_training_dataset.csv")
+df = df.dropna(subset=['text']) # Drop rows where text is missing
 
 label_columns = ['tsunami', 'high_waves', 'coastal_flooding', 'not_relevant', 'panic', 'informational', 'help_needed']
 df['labels'] = df[label_columns].values.astype(np.float32).tolist()
@@ -71,7 +73,7 @@ model = AutoModelForSequenceClassification.from_pretrained(
     label2id={label: i for i, label in enumerate(label_columns)}
 )
 
-# --- 6. Metrics and Custom Trainer (Corrected) ---
+# --- 6. Metrics and Custom Trainer ---
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
     sigmoid = torch.nn.Sigmoid()
@@ -84,7 +86,6 @@ def compute_metrics(eval_pred):
     return {'f1_micro': f1_micro, 'f1_macro': f1_macro}
 
 class WeightedLossTrainer(Trainer):
-    # Added **kwargs to accept extra arguments
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         outputs = model(**inputs)
         logits = outputs.logits
@@ -96,7 +97,7 @@ class WeightedLossTrainer(Trainer):
 # --- 7. Training Arguments ---
 training_args = TrainingArguments(
     output_dir="./trained_model",
-    num_train_epochs=5,
+    num_train_epochs=3, # Reduced to prevent overfitting
     per_device_train_batch_size=16,
     per_device_eval_batch_size=32,
     learning_rate=2e-5,
@@ -122,6 +123,7 @@ trainer = WeightedLossTrainer(
     train_dataset=tokenized_train,
     eval_dataset=tokenized_eval,
     compute_metrics=compute_metrics,
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
 )
 
 print("🔥 Starting training with RoBERTa-base...")
